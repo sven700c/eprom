@@ -1,68 +1,15 @@
-//FIXME
-const int programPin=3;
-const int readPin=4;
-const int enablePin=2;
+// Teensy 2
+const int programPin=0;
+const int readPin=3;
+const int enablePin=16;
+
+const int shiftDATA=4;
+const int shiftCLK=1;
+const int shiftLATCH=2;
 
 const unsigned long romSize=1024*1024;
 
-
-/*
- * snes pinout(some of the pins don't follow the standard pinout)
- * use this pinout for burning eproms for use with snes.
- * You can also use the other pinout and mess up the rom using utilities
- * available online
- */
- 
-int adrPins[20]={22,//eprom A0  snes A0
-                  23,//eprom A1  snes A1
-                  24,//eprom A2  snes A2
-                  25,//eprom A3  snes A3
-                  26,//eprom A4  snes A4
-                  27,//eprom A5  snes A5
-                  28,//eprom A6  snes A6
-                  29,//eprom A7  snes A7
-                  30,//eprom A8  snes A8
-                  31,//eprom A9  snes A9
-                  32,//eprom A10 snes A10
-                  33,//eprom A11 snes A11
-                  34,//eprom A12 snes A12
-                  35,//eprom A13 snes A13
-                  36,//eprom A14 snes A14
-                  37,//eprom A15 snes A15
-                  40,//eprom A18 snes A16 *
-                  41,//eprom A19 snes A17 *
-                  38,//eprom A16 snes A18 *
-                  39,//eprom A17 snes A19 * 
-                  };
-
-/*                  
- *Regular eprom pinout, uncommnet this one and comment the above                   
- *to burn regular eproms for use with other systems.
- *You may have to actually edit this for use with your console/8bit computer
- *The pinout from the eprom is different from the snes pinout
-int adrPins[20]={22,//eprom A0  snes A0
-                  23,//eprom A1  snes A1
-                  24,//eprom A2  snes A2
-                  25,//eprom A3  snes A3
-                  26,//eprom A4  snes A4
-                  27,//eprom A5  snes A5
-                  28,//eprom A6  snes A6
-                  29,//eprom A7  snes A7
-                  30,//eprom A8  snes A8
-                  31,//eprom A9  snes A9
-                  32,//eprom A10 snes A10
-                  33,//eprom A11 snes A11
-                  34,//eprom A12 snes A12
-                  35,//eprom A13 snes A13
-                  36,//eprom A14 snes A14
-                  37,//eprom A15 snes A15
-                  38,//eprom A16 snes A18 *
-                  39,//eprom A17 snes A19 *
-                  40,//eprom A18 snes A16 *
-                  41 //eprom A19 snes A17 *
-                  };
-*/
-char dataPins[8]={5,6,7,8,9,10,11,12};
+char dataPins[8]={13,14,15,5,6,7,8,9};
 
 byte inByte=0;
 unsigned int secH=0,secL=0;
@@ -71,9 +18,10 @@ void setup() {
   pinMode(programPin,OUTPUT);
   pinMode(readPin,OUTPUT);
   pinMode(enablePin,OUTPUT);
-  for(int i=0;i<20;i++){
-    pinMode(adrPins[i],OUTPUT);
-  }
+  pinMode(shiftDATA,OUTPUT);
+  pinMode(shiftCLK,OUTPUT);
+  pinMode(shiftLATCH,OUTPUT);
+
   digitalWrite(programPin,LOW);
   digitalWrite(readPin,LOW);
   digitalWrite(enablePin,HIGH);
@@ -81,6 +29,8 @@ void setup() {
   delay(1000);
   programMode();
 }
+
+
 int index=0;
 void loop() {
   if(Serial.available()){
@@ -115,6 +65,8 @@ void programMode(){
   digitalWrite(readPin,LOW);
   digitalWrite(programPin,HIGH);
 }
+
+
 void readMode(){
   //data as input
   for(int i=0;i<8;i++){
@@ -124,19 +76,19 @@ void readMode(){
   digitalWrite(readPin,LOW);
 
 }
-void setAddress(uint32_t Addr){
-    for(int i=0;i<8;i++){
-      digitalWrite(adrPins[i],Addr&(1<<i));
-    }
-    Addr=Addr>>8;
-    for(int i=0;i<8;i++){
-      digitalWrite(adrPins[i+8],Addr&(1<<i));
-    }
-    Addr=Addr>>8;
-    for(int i=0;i<4;i++){
-      digitalWrite(adrPins[i+16],Addr&(1<<i));
-    }
+
+
+void setAddress(unsigned long Address){
+    shiftOut(shiftDATA, shiftCLK, MSBFIRST, (Address >> 16));
+    shiftOut(shiftDATA, shiftCLK, MSBFIRST, (Address >> 8));
+    shiftOut(shiftDATA, shiftCLK, MSBFIRST, Address);
+
+    digitalWrite(shiftLATCH, LOW);
+    digitalWrite(shiftLATCH, HIGH);
+    digitalWrite(shiftLATCH, LOW);
 }
+
+
 byte readByte(unsigned long adr){
     byte data;
     setAddress(adr);
@@ -149,11 +101,15 @@ byte readByte(unsigned long adr){
     digitalWrite(enablePin,HIGH);
     return data;
 }
+
+
 void setData(char Data){
   for(int i=0;i<8;i++){
       digitalWrite(dataPins[i],Data&(1<<i));
   }
 }
+
+
 void programByte(byte Data){
   setData(Data);
   //Vpp pulse
@@ -162,6 +118,7 @@ void programByte(byte Data){
   delayMicroseconds(60);
   digitalWrite(enablePin,HIGH);
 }
+
 
 void writeSector(unsigned char sectorH,unsigned char sectorL){
   byte dataBuffer[128];
@@ -190,8 +147,9 @@ void writeSector(unsigned char sectorH,unsigned char sectorL){
   Serial.write(CHK);
   }
   readMode();
-
 }
+
+
 int readROM(){
   unsigned long num=1024*1024;
   unsigned long address;
